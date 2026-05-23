@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MEME BOARD — LIVE</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080a0c;--bg2:#0f1215;--bg3:#161b20;--border:#1e2830;
+  --accent:#00e5a0;--accent-dim:rgba(0,229,160,0.12);--accent-glow:rgba(0,229,160,0.25);
+  --red:#ff3b5c;--red-dim:rgba(255,59,92,0.12);
+  --yellow:#f5c400;--yellow-dim:rgba(245,196,0,0.12);
+  --text:#d0d8e0;--muted:#4a5568;--mono:'Space Mono',monospace;
+}
+html,body{height:100%}
+body{font-family:var(--mono);background:var(--bg);color:var(--text);overflow-x:hidden;user-select:none}
+
+#topbar{
+  display:flex;align-items:center;gap:12px;padding:14px 20px;
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100;
+}
+#logo{font-size:15px;font-weight:700;letter-spacing:1px;color:#fff;flex-shrink:0}
+#logo span{color:var(--accent)}
+#now-playing{
+  flex:1;font-size:12px;color:var(--accent);font-weight:700;
+  letter-spacing:0.5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  padding:0 12px;min-width:0;
+}
+#now-playing.error{color:var(--red)}
+#stop-btn{
+  flex-shrink:0;display:flex;align-items:center;gap:8px;
+  background:var(--red-dim);border:1px solid var(--red);color:var(--red);
+  font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+  padding:8px 18px;border-radius:6px;cursor:pointer;transition:background 0.1s,transform 0.08s;
+}
+#stop-btn:hover{background:rgba(255,59,92,0.25)}
+#stop-btn:active{transform:scale(0.96)}
+#stop-btn .dot{
+  width:9px;height:9px;border-radius:2px;background:var(--red);display:inline-block;
+  animation:blink-stop 1s step-end infinite;
+}
+@keyframes blink-stop{0%,100%{opacity:1}50%{opacity:0.3}}
+
+#hint-strip{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  padding:8px 20px;background:var(--bg2);border-bottom:1px solid var(--border);
+  font-size:10px;color:var(--muted);
+}
+.hint-key{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:3px;padding:1px 6px;font-size:10px;color:#6a7a8a;
+}
+
+#layout{display:flex;height:calc(100vh - 90px);overflow:hidden}
+
+#board-col{flex:1;overflow-y:auto;padding:16px;min-width:0}
+#board-col::-webkit-scrollbar{width:4px}
+#board-col::-webkit-scrollbar-track{background:var(--bg)}
+#board-col::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+.sec-label{
+  font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);margin:0 0 10px 2px;
+  display:flex;align-items:center;gap:8px;
+}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.pad-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
+  gap:8px;margin-bottom:20px;
+}
+
+.pad{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;padding:16px 8px 14px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  cursor:pointer;position:relative;color:inherit;font-family:var(--mono);
+  width:100%;min-height:100px;
+  transition:background 0.08s,border-color 0.08s,transform 0.06s,box-shadow 0.08s;
+}
+.pad:hover{background:#1a2028;border-color:#2e3e50}
+.pad:active,.pad.playing{
+  background:var(--accent-dim);border-color:var(--accent);
+  transform:scale(0.96);box-shadow:0 0 14px var(--accent-glow);
+}
+.pad.unkeyed{border-style:dashed;border-color:#252f3a}
+.pad.unkeyed:active,.pad.unkeyed.playing{
+  border-style:solid;border-color:var(--yellow);
+  background:var(--yellow-dim);box-shadow:0 0 14px rgba(245,196,0,0.2);
+}
+.pad .key-badge{
+  position:absolute;top:7px;right:8px;font-size:10px;font-weight:700;color:var(--muted);
+  background:#0d1218;border:1px solid var(--border);border-radius:4px;padding:1px 5px;line-height:1.4;
+}
+.pad.playing .key-badge{color:var(--accent);border-color:rgba(0,229,160,0.3)}
+.pad.unkeyed.playing .key-badge{color:var(--yellow)}
+.pad .emoji{font-size:28px;line-height:1;pointer-events:none}
+.pad .pad-label{
+  font-size:9px;color:#8a9ab0;text-align:center;font-weight:700;
+  text-transform:uppercase;letter-spacing:0.6px;word-break:break-word;
+  line-height:1.4;max-width:110px;pointer-events:none;
+}
+.pad.playing .pad-label{color:var(--accent)}
+.pad.unkeyed.playing .pad-label{color:var(--yellow)}
+.pad-progress{
+  position:absolute;bottom:0;left:0;height:2px;width:0%;
+  background:var(--accent);border-radius:0 0 10px 10px;
+  transition:width 0.1s linear;
+}
+.pad.unkeyed .pad-progress{background:var(--yellow)}
+
+#list-panel{
+  width:270px;flex-shrink:0;display:flex;flex-direction:column;
+  background:var(--bg2);border-left:1px solid var(--border);overflow:hidden;
+}
+#list-head{padding:14px 16px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+#list-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+#list-title{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+#list-count{font-size:10px;color:var(--muted)}
+#list-search-box{
+  display:flex;align-items:center;gap:8px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 10px;
+}
+#list-search-box:focus-within{border-color:#2e3e50}
+#list-search{
+  background:none;border:none;outline:none;
+  font-family:var(--mono);font-size:12px;color:var(--text);width:100%;
+}
+#list-search::placeholder{color:var(--muted)}
+#list-items{overflow-y:auto;flex:1;padding:8px}
+#list-items::-webkit-scrollbar{width:3px}
+#list-items::-webkit-scrollbar-track{background:var(--bg2)}
+#list-items::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.list-item{
+  display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;
+  cursor:pointer;border:1px solid transparent;
+  transition:background 0.1s,border-color 0.1s;margin-bottom:3px;
+}
+.list-item:hover{background:var(--bg3);border-color:var(--border)}
+.list-item.playing{background:var(--accent-dim);border-color:var(--accent)}
+.list-item.unkeyed.playing{background:var(--yellow-dim);border-color:var(--yellow)}
+.li-emoji{font-size:18px;flex-shrink:0;width:26px;text-align:center}
+.li-info{flex:1;min-width:0}
+.li-label{
+  font-size:11px;font-weight:700;color:var(--text);
+  text-transform:uppercase;letter-spacing:0.5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.list-item.playing .li-label{color:var(--accent)}
+.list-item.unkeyed.playing .li-label{color:var(--yellow)}
+.li-key{font-size:10px;color:var(--muted);margin-top:2px}
+.li-play-ico{font-size:12px;color:var(--muted);flex-shrink:0;transition:color 0.1s}
+.list-item:hover .li-play-ico,.list-item.playing .li-play-ico{color:var(--accent)}
+.list-item.unkeyed.playing .li-play-ico{color:var(--yellow)}
+#list-no-result{font-size:12px;color:var(--muted);text-align:center;padding:24px 0;display:none}
+
+@media(max-width:700px){
+  #layout{flex-direction:column-reverse;height:auto;overflow:visible}
+  #list-panel{width:100%;height:300px;border-left:none;border-top:1px solid var(--border)}
+  #board-col{overflow-y:visible}
+  .pad-grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px}
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div id="logo">🎛️ MEME<span>BOARD</span></div>
+  <div id="now-playing">— READY —</div>
+  <button id="stop-btn"><span class="dot"></span> STOP ALL</button>
+</div>
+
+<div id="hint-strip">
+  <span class="hint-key">A–Z</span>
+  <span style="color:var(--border)">+</span>
+  <span class="hint-key">0–9</span>
+  <span style="color:var(--border);margin:0 4px">|</span>
+  <span>hotkeys trigger pads instantly</span>
+  <span style="color:var(--border);margin:0 4px">|</span>
+  <span class="hint-key" style="color:var(--yellow);border-color:rgba(245,196,0,0.3)">dashed</span>
+  <span>= no key, use list</span>
+  <span style="color:var(--border);margin:0 4px">|</span>
+  <span class="hint-key" style="color:var(--red);border-color:rgba(255,59,92,0.3)">ESC</span>
+  <span>= stop all</span>
+</div>
+
+<div id="layout">
+  <div id="board-col">
+    <div class="sec-label">Keys A – Z</div>
+    <div class="pad-grid" id="grid-az"></div>
+    <div class="sec-label">Keys 0 – 9</div>
+    <div class="pad-grid" id="grid-09"></div>
+    <div class="sec-label">No key assigned</div>
+    <div class="pad-grid" id="grid-nk"></div>
+  </div>
+
+  <div id="list-panel">
+    <div id="list-head">
+      <div id="list-title-row">
+        <div id="list-title">All Sounds</div>
+        <div id="list-count"></div>
+      </div>
+      <div id="list-search-box">
+        <span style="color:var(--muted);font-size:14px">⌕</span>
+        <input id="list-search" placeholder="search sounds…" autocomplete="off" spellcheck="false"/>
+      </div>
+    </div>
+    <div id="list-items"></div>
+    <div id="list-no-result">No sounds found 💀</div>
+  </div>
+</div>
+
+<script>
+// key:'6' was duplicate of key:'o' (both yoouuuuuu.mp3) — fixed: key 6 = Beep (drop beep.mp3 in sounds/)
+const SOUNDS = [
+  {key:'a', label:'Bruh',              emoji:'😑', file:'bruh.mp3'},
+  {key:'b', label:'Chicken',           emoji:'🐔', file:'chicken.mp3'},
+  {key:'c', label:'Boom',              emoji:'💥', file:'boom.mp3'},
+  {key:'d', label:'Huh',               emoji:'🤨', file:'huh.mp3'},
+  {key:'e', label:'Sed',               emoji:'😢', file:'sed.mp3'},
+  {key:'f', label:'Faaahhh',           emoji:'😤', file:'faaahhh.mp3'},
+  {key:'g', label:'Dun Dun',           emoji:'😱', file:'dun.mp3'},
+  {key:'h', label:'Thud',              emoji:'💢', file:'thud.mp3'},
+  {key:'i', label:'Impostor',          emoji:'📮', file:'Impostor.mp3'},
+  {key:'j', label:'Meow Meow',         emoji:'🐱', file:'meowmeow.mp3'},
+  {key:'k', label:'Eh',                emoji:'🤷', file:'eh.mp3'},
+  {key:'l', label:'Ruko Zara',         emoji:'✋', file:'rukozara.mp3'},
+  {key:'m', label:'Chalo',             emoji:'🏃', file:'chalo.mp3'},
+  {key:'n', label:'Aayein',            emoji:'😭', file:'aayein.mp3'},
+  {key:'o', label:'Yoouuuu',           emoji:'🔔', file:'yoouuuuuu.mp3'},
+  {key:'p', label:'Prove It',          emoji:'👊', file:'prove.mp3'},
+  {key:'q', label:'Out',               emoji:'🚪', file:'out.mp3'},
+  {key:'r', label:'Romance',           emoji:'💕', file:'romanceeeeeeeeeeeeee.mp3'},
+  {key:'s', label:'Running',           emoji:'🏃', file:'Running Sound.mp3'},
+  {key:'t', label:'Cat Laugh',         emoji:'😹', file:'cat-laugh-meme-1.mp3'},
+  {key:'u', label:'Abe Sale',          emoji:'😠', file:'abe-sale.mp3'},
+  {key:'v', label:'Slap',              emoji:'👋', file:'slap-soundmaster13-49669815_4L20wGP.mp3'},
+  {key:'w', label:'Indian Song',       emoji:'🎵', file:'indian-song.mp3'},
+  {key:'x', label:'Yaaayyy',           emoji:'🎉', file:'YAAAAYYYYYY.mp3'},
+  {key:'y', label:'RG KK',             emoji:'🎤', file:'RG KK.mp3'},
+  {key:'z', label:'Ammi Bacha',        emoji:'🤲', file:'ammi-bacha-la-re.mp3'},
+  {key:'0', label:'Anime Ahh',         emoji:'😳', file:'anime-ahh.mp3'},
+  {key:'1', label:'Matlab Wo',         emoji:'👆', file:'matlab-wo-alag-hi-level-ka-banda-tha.mp3'},
+  {key:'2', label:'Rom Rom',           emoji:'🙏', file:'rom-rom-bhaiyo.mp3'},
+  {key:'3', label:'Crickets',          emoji:'🦗', file:'awkward-cricket-sound-effect.mp3'},
+  {key:'4', label:'Lekin Ye Sala',     emoji:'😤', file:'lekin-ye-sala.mp3'},
+  {key:'5', label:'Family Dekhte',     emoji:'📺', file:'family-dekhte-hain-nahi-to.mp3'},
+  {key:'6', label:'Beep',              emoji:'📡', file:'beep.mp3', beep:true},
+  {key:'7', label:'Maro Jump',         emoji:'🦘', file:'maro-jump-sound-effect_1.mp3'},
+  {key:'8', label:'Jo Gareeb',         emoji:'💸', file:'jo-gareeb-hove-naa.mp3'},
+  {key:'9', label:'Dry Fart',          emoji:'💨', file:'dry-fart.mp3'},
+  {key:null, label:'Aji Mangal',       emoji:'🪄', file:'aji-mangal.mp3'},
+  {key:null, label:'Emotional Damage', emoji:'💔', file:'emotional-damage-meme.mp3'},
+  {key:null, label:'Chapad Chapad',    emoji:'🗣️',  file:'ye-ladki-tum-bohut-bolti-ho-chapad-chapad.mp3'},
+];
+
+const gridAZ     = document.getElementById('grid-az');
+const grid09     = document.getElementById('grid-09');
+const gridNK     = document.getElementById('grid-nk');
+const nowPlaying = document.getElementById('now-playing');
+const stopBtn    = document.getElementById('stop-btn');
+const listItems  = document.getElementById('list-items');
+const listCount  = document.getElementById('list-count');
+const listNoRes  = document.getElementById('list-no-result');
+const listSearch = document.getElementById('list-search');
+
+let currentAudio     = null;
+let currentPad       = null;
+let currentListItem  = null;
+let progressInterval = null;
+const padMap         = {};  // file -> pad el
+const listItemMap    = {};  // file -> list el (rebuilt on search)
+
+// ── Web Audio beep fallback ──
+function playBeepFallback(sound, pad, li) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(); osc.stop(ctx.currentTime + 0.4);
+    nowPlaying.textContent = '▶  ' + sound.emoji + '  ' + sound.label.toUpperCase();
+    nowPlaying.classList.remove('error');
+    pad.classList.add('playing');
+    if(li) li.classList.add('playing');
+    currentPad = pad; currentListItem = li || null;
+    setTimeout(() => {
+      pad.classList.remove('playing');
+      if(li) li.classList.remove('playing');
+      nowPlaying.textContent = '— READY —';
+      currentPad = null; currentListItem = null;
+    }, 450);
+  } catch(e) {}
+}
+
+function stopAll(silent) {
+  if(currentAudio){ currentAudio.pause(); currentAudio.currentTime = 0; }
+  if(currentPad)       currentPad.classList.remove('playing');
+  if(currentListItem)  currentListItem.classList.remove('playing');
+  clearInterval(progressInterval);
+  if(currentPad){
+    const bar = currentPad.querySelector('.pad-progress');
+    if(bar) bar.style.width = '0%';
+  }
+  currentAudio = currentPad = currentListItem = null;
+  if(!silent) nowPlaying.textContent = '— STOPPED —';
+  nowPlaying.classList.remove('error');
+}
+
+function playSound(sound) {
+  stopAll(true);
+
+  const pad = padMap[sound.file] || null;
+  const li  = listItemMap[sound.file] || null;
+
+  // beep sound: try mp3 first, fall back to Web Audio
+  if(sound.beep) {
+    const testAudio = new Audio('sounds/' + sound.file);
+    testAudio.addEventListener('error', () => playBeepFallback(sound, pad, li));
+    testAudio.addEventListener('canplaythrough', () => {
+      currentAudio = testAudio;
+      currentPad = pad; currentListItem = li;
+      if(pad) pad.classList.add('playing');
+      if(li)  li.classList.add('playing');
+      nowPlaying.textContent = '▶  ' + sound.emoji + '  ' + sound.label.toUpperCase();
+      testAudio.play();
+      testAudio.onended = () => {
+        if(pad) pad.classList.remove('playing');
+        if(li)  li.classList.remove('playing');
+        nowPlaying.textContent = '— READY —';
+        currentAudio = currentPad = currentListItem = null;
+      };
+    });
+    return;
+  }
+
+  const audio = new Audio('sounds/' + sound.file);
+  currentAudio = audio;
+  currentPad = pad; currentListItem = li;
+
+  if(pad) pad.classList.add('playing');
+  if(li)  li.classList.add('playing');
+  nowPlaying.textContent = '▶  ' + sound.emoji + '  ' + sound.label.toUpperCase();
+  nowPlaying.classList.remove('error');
+
+  audio.play().catch(() => {
+    nowPlaying.textContent = '⚠ Missing: sounds/' + sound.file;
+    nowPlaying.classList.add('error');
+    if(pad) pad.classList.remove('playing');
+    if(li)  li.classList.remove('playing');
+    currentAudio = currentPad = currentListItem = null;
+  });
+
+  audio.addEventListener('loadedmetadata', () => {
+    if(!audio.duration || !isFinite(audio.duration)) return;
+    clearInterval(progressInterval);
+    progressInterval = setInterval(() => {
+      if(!currentPad || !currentAudio) return clearInterval(progressInterval);
+      const bar = currentPad.querySelector('.pad-progress');
+      if(bar) bar.style.width = (currentAudio.currentTime / currentAudio.duration * 100) + '%';
+    }, 80);
+  });
+
+  audio.onended = () => {
+    if(pad) pad.classList.remove('playing');
+    if(li)  li.classList.remove('playing');
+    clearInterval(progressInterval);
+    if(pad){ const bar = pad.querySelector('.pad-progress'); if(bar) bar.style.width='0%'; }
+    nowPlaying.textContent = '— READY —';
+    currentAudio = currentPad = currentListItem = null;
+  };
+}
+
+function makePad(sound) {
+  const btn = document.createElement('button');
+  btn.className = 'pad' + (sound.key ? '' : ' unkeyed');
+  btn.innerHTML =
+    (sound.key
+      ? `<span class="key-badge">${sound.key.toUpperCase()}</span>`
+      : `<span class="key-badge" style="color:#2a3a4a">—</span>`) +
+    `<span class="emoji">${sound.emoji}</span>` +
+    `<span class="pad-label">${sound.label}</span>` +
+    `<div class="pad-progress"></div>`;
+  btn.addEventListener('click', () => playSound(sound));
+  padMap[sound.file] = btn;
+  return btn;
+}
+
+function makeListItem(sound) {
+  const li = document.createElement('div');
+  li.className = 'list-item' + (sound.key ? '' : ' unkeyed');
+  li.innerHTML =
+    `<div class="li-emoji">${sound.emoji}</div>` +
+    `<div class="li-info">` +
+      `<div class="li-label">${sound.label}</div>` +
+      `<div class="li-key">${sound.key ? 'Key: ' + sound.key.toUpperCase() : 'No key'}</div>` +
+    `</div>` +
+    `<div class="li-play-ico">▶</div>`;
+  li.addEventListener('click', () => playSound(sound));
+  listItemMap[sound.file] = li;
+  return li;
+}
+
+function renderPads() {
+  gridAZ.innerHTML = ''; grid09.innerHTML = ''; gridNK.innerHTML = '';
+  SOUNDS.forEach(s => {
+    const pad = makePad(s);
+    if (!s.key)                                gridNK.appendChild(pad);
+    else if (s.key >= '0' && s.key <= '9')     grid09.appendChild(pad);
+    else                                        gridAZ.appendChild(pad);
+  });
+}
+
+function renderList(filter) {
+  // clear old map entries for list items
+  Object.keys(listItemMap).forEach(k => delete listItemMap[k]);
+  listItems.innerHTML = '';
+  const q = (filter || '').toLowerCase().trim();
+  const filtered = q
+    ? SOUNDS.filter(s => s.label.toLowerCase().includes(q) || (s.key && s.key === q))
+    : SOUNDS;
+  listCount.textContent = filtered.length + ' sounds';
+  listNoRes.style.display = filtered.length === 0 ? 'block' : 'none';
+  filtered.forEach(s => listItems.appendChild(makeListItem(s)));
+}
+
+renderPads();
+renderList('');
+
+document.addEventListener('keydown', e => {
+  if(e.target.tagName === 'INPUT') return;
+  if(e.key === 'Escape') { stopAll(); return; }
+  const k = e.key.toLowerCase();
+  const sound = SOUNDS.find(s => s.key === k);
+  if(sound) playSound(sound);
+});
+
+stopBtn.addEventListener('click', () => stopAll());
+listSearch.addEventListener('input', () => renderList(listSearch.value));
+</script>
+</body>
+</html>
